@@ -1,27 +1,32 @@
 var c = document.getElementById("game");
 var ctx = c.getContext("2d");
 
+//add dummy level
+levels.push([[]]);
 //global vars
+
+var fps = 60;
 
 //player specific
 var playerSize = 30;
 var playerPos = [0.5,0.5];
 var sizer = 6;
-var speed = 1/200;
+var speed = fps/(60*60);
 var winCount = 0;
+var winLen = fps*10/6;
 
-//the circle
+//the dots
 var dotPositions = [];
 var stuckDots = [];
 var dotNumber = 128;
-var dotLength = 400;
-var delayTime = 100;
+var dotLength = 2*fps;
+var delayTime = fps/2;
 for(var i=0;i<dotNumber;i++){
   dotPositions.push([0,0]);
   stuckDots.push(false);
 }
 var timeoutCounter = 0;
-var dotSpeed = .005;
+var dotSpeed = fps/(60*60);
 var dpos = [playerPos[0],playerPos[1]];
 
 //global board vars
@@ -97,6 +102,7 @@ function reset(){
     dpos = [0.5,0.5];
   }
   timeoutCounter = 0;
+  winCount = 0;
 }
 
 function isEdge(posx,posy){
@@ -134,11 +140,15 @@ function draw(){
     ctx.fillRect(0,modulus(i*gridSize-gridSize/moveScalar*playerPos[1], document.body.clientHeight), document.body.clientWidth,1);
   }
   //draw yellow win stage
-  ctx.fillStyle = "rgba(255,255,0,.25)";
+  var winPercent = winCount/winLen;
+  ctx.fillStyle = "rgba(255,255,0,0.25)";
+  ctx.shadowBlur = winPercent*100;
+  ctx.shadowColor="rgba(255,255,0,0.75)";
   var m = toCenter(winsquare[0]-playerPos[0],winsquare[1]-playerPos[1]);
 
   ctx.fillRect(m[0],m[1],sizer*playerSize,sizer*playerSize);
-  
+
+  ctx.shadowBlur = 0;
   //draw circle
   var m = toCenter(dotPositions[0][0]+(dpos[0]-playerPos[0]),dotPositions[0][1]+(dpos[1]-playerPos[1]));
 
@@ -154,7 +164,7 @@ function draw(){
   ctx.stroke();
   //draw player
   ctx.fillStyle = "#222";
-  ctx.strokeStyle = "#000";
+  ctx.strokeStyle = "#3C3";
   ctx.lineWidth = 5;
   ctx.beginPath();
   ctx.arc(document.body.clientWidth/2,document.body.clientHeight/2,playerSize,0,2*Math.PI);
@@ -197,6 +207,12 @@ function doIt(){
         dotPositions[i][1] += dotSpeed*Math.sin(i*1.0/dotPositions.length*(Math.PI*2));
       }else{
         stuckDots[i] = true;
+        if(Math.abs(dotPositions[i][0]+dpos[0]-Math.round(dotPositions[i][0]+dpos[0]))<2*dotSpeed){
+          dotPositions[i][0] = Math.round(dotPositions[i][0]+dpos[0])-dpos[0];
+        }
+        if(Math.abs(dotPositions[i][1]+dpos[1]-Math.round(dotPositions[i][1]+dpos[1]))<2*dotSpeed){
+          dotPositions[i][1] = Math.round(dotPositions[i][1]+dpos[1])-dpos[1];
+        }
       }
     }
     //test collision
@@ -247,17 +263,11 @@ function doIt(){
     
     if(winsquare[0]==Math.floor(playerPos[0]) && winsquare[1]==Math.floor(playerPos[1])){
       winCount++;
-      if(winCount>200){
+      if(winCount>winLen){
         if(clevel<levels.length-1){
           clevel++;
           console.log(clevel);
-          board = levels[clevel];
-          for(var i=0;i<board.length;i++){
-            if(board[i].indexOf("2")!=-1){
-              winsquare = [i,board[i].indexOf(2)];
-            }
-          }
-          reset();
+          startGame();
         }else{
           state="choose";
         }
@@ -270,9 +280,10 @@ function doIt(){
     ctx.fillStyle = "#222";
     ctx.fillRect(0,0,document.body.clientWidth,document.body.clientHeight);
     ctx.strokeStyle = "#000";
-    ctx.fillStyle = "#FFF";
+    ctx.fillStyle = "#3C3";
+    ctx.strokeStyle = "#3C3";
     var fitting = Math.floor(document.body.clientWidth/(menuSquareSize+menuSpace));
-    for(var i=0;i<levels.length;i++){
+    for(var i=0;i<levels.length-1;i++){
       roundRect(ctx, 
         10+menuSpace*(i%fitting) + menuSquareSize*(i%fitting), 
         10+menuSpace*(Math.floor(i/fitting)) + menuSquareSize*Math.floor(i/fitting),
@@ -283,6 +294,15 @@ function doIt(){
         10+menuSpace*(i%fitting) + menuSquareSize*(i%fitting+0.20), 
         10+menuSpace*(Math.floor(i/fitting)) + menuSquareSize*(Math.floor(i/fitting)+0.85));
     }
+    roundRect(ctx,
+      10+menuSpace*((levels.length-1)%fitting) + menuSquareSize*((levels.length-1)%fitting),
+      10+menuSpace*(Math.floor((levels.length-1)/fitting)) + menuSquareSize*Math.floor((levels.length-1)/fitting),
+      menuSquareSize,
+      menuSquareSize);
+    ctx.fillText(
+      "R",
+      10+menuSpace*((levels.length-1)%fitting) + menuSquareSize*((levels.length-1)%fitting+0.10),
+      10+menuSpace*(Math.floor((levels.length-1)/fitting)) + menuSquareSize*(Math.floor((levels.length-1)/fitting)+0.85));
   }
 }
 
@@ -293,16 +313,28 @@ document.onclick = function(event){
        (event.clientY-10)%rectSize<menuSquareSize
     ){
       clevel = Math.floor(event.clientX/rectSize)+(Math.floor(document.body.clientWidth/rectSize))*Math.floor(event.clientY/rectSize);
-      board = levels[clevel];
-      for(var i=0;i<board.length;i++){
-        if(board[i].indexOf("2")!=-1){
-          winsquare = [i,board[i].indexOf(2)];
-        }
-      }
-      state="play";
+      startGame();
     }
   }
+};
+
+function startGame(){
+  if(clevel == levels.length - 1){
+    levels[clevel] = (new Maze(15,15)).map;
+    console.log(levels[clevel]);
+    levels[clevel][levels[clevel].length-1][levels[clevel][0].length-1] = "2";
+  }
+  board = levels[clevel];
+  for(var i=0;i<board.length;i++){
+    console.log([board[i],board[i].indexOf("2")]);
+    if(board[i].indexOf("2")!=-1){
+      winsquare = [i,board[i].indexOf("2")];
+    }
+  }
+  reset();
+  state="play";
 }
+
 window.onload = function(){
-  setInterval(doIt,5);
+  setInterval(doIt,1000/60);
 };
